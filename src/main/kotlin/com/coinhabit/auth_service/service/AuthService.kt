@@ -1,21 +1,22 @@
-package com.coinhabit.auth_service.repository
+package com.coinhabit.auth_service.service
 
 import com.coinhabit.auth_service.dto.AuthResponse
 import com.coinhabit.auth_service.dto.LoginRequest
 import com.coinhabit.auth_service.dto.RegisterRequest
 import com.coinhabit.auth_service.dto.UserDto
 import com.coinhabit.auth_service.entity.User
+import com.coinhabit.auth_service.repository.UserRepository
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 
 @Service
 class AuthService(
     private val userRepository: UserRepository,
-    private val passwordEncoder: PasswordEncoder
+    private val passwordEncoder: PasswordEncoder,
+    private val jwtService: JwtService // <-- Внедрили генератор токенов
 ) {
     fun register(request: RegisterRequest): AuthResponse {
         if (userRepository.existsByEmail(request.email)) {
-            // Временно бросаем базовое исключение, позже заменим на кастомное для единого формата ошибок
             throw RuntimeException("Email уже занят")
         }
 
@@ -26,8 +27,12 @@ class AuthService(
 
         val savedUser = userRepository.save(user)
 
-        // Заглушка до реализации генерации JWT
-        val token = "dummy-jwt-token"
+        // Генерируем реальный JWT токен
+        val token = jwtService.generateToken(
+            email = savedUser.email,
+            role = savedUser.role,
+            userId = savedUser.id.toString()
+        )
 
         return AuthResponse(
             token = token,
@@ -39,12 +44,16 @@ class AuthService(
         val user = userRepository.findByEmail(request.email)
             ?: throw RuntimeException("Неверный email или пароль")
 
-        // matches() безопасно сравнивает введенный текст с хешем из БД
         if (!passwordEncoder.matches(request.password, user.passwordHash)) {
             throw RuntimeException("Неверный email или пароль")
         }
 
-        val token = "dummy-jwt-token"
+        // Генерируем реальный JWT токен
+        val token = jwtService.generateToken(
+            email = user.email,
+            role = user.role,
+            userId = user.id.toString()
+        )
 
         return AuthResponse(
             token = token,
