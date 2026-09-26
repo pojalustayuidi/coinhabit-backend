@@ -3,7 +3,7 @@ package com.coinhabit.auth_service.controller
 import com.coinhabit.auth_service.dto.AuthResponse
 import com.coinhabit.auth_service.dto.LoginRequest
 import com.coinhabit.auth_service.dto.RegisterRequest
-import com.coinhabit.auth_service.repository.AuthService
+import com.coinhabit.auth_service.service.AuthService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
