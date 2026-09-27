@@ -1,6 +1,7 @@
 package com.coinhabit.auth_service.exception
 
 import com.coinhabit.auth_service.dto.ErrorResponse
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -9,6 +10,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
+
+    private val logger = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
 
     @ExceptionHandler(UserAlreadyExistsException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
@@ -32,6 +35,10 @@ class GlobalExceptionHandler {
     @ExceptionHandler(Exception::class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     fun handleGeneralException(e: Exception): ErrorResponse {
-        return ErrorResponse(status = HttpStatus.INTERNAL_SERVER_ERROR.value(), message = e.message ?: "Внутренняя ошибка сервера")
+        logger.error("Непредвиденная ошибка", e)
+        return ErrorResponse(
+            status = HttpStatus.INTERNAL_SERVER_ERROR.value(),
+            message = "Внутренняя ошибка сервера. Пожалуйста, повторите попытку позже."
+        )
     }
 }
