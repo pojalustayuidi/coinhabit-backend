@@ -5,6 +5,8 @@ import com.coinhabit.auth_service.dto.LoginRequest
 import com.coinhabit.auth_service.dto.RegisterRequest
 import com.coinhabit.auth_service.dto.UserDto
 import com.coinhabit.auth_service.entity.User
+import com.coinhabit.auth_service.exception.InvalidCredentialsException
+import com.coinhabit.auth_service.exception.UserAlreadyExistsException
 import com.coinhabit.auth_service.repository.UserRepository
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
@@ -17,9 +19,8 @@ class AuthService(
 ) {
     fun register(request: RegisterRequest): AuthResponse {
         if (userRepository.existsByEmail(request.email)) {
-            throw RuntimeException("Email уже занят")
+            throw UserAlreadyExistsException("Email уже занят")
         }
-
         val user = User(
             email = request.email,
             passwordHash = passwordEncoder.encode(request.password)
@@ -42,10 +43,10 @@ class AuthService(
 
     fun login(request: LoginRequest): AuthResponse {
         val user = userRepository.findByEmail(request.email)
-            ?: throw RuntimeException("Неверный email или пароль")
+            ?: throw InvalidCredentialsException("Неверный email или пароль")
 
         if (!passwordEncoder.matches(request.password, user.passwordHash)) {
-            throw RuntimeException("Неверный email или пароль")
+            throw InvalidCredentialsException("Неверный email или пароль")
         }
 
         // Генерируем реальный JWT токен
