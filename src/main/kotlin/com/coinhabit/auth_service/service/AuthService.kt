@@ -15,29 +15,30 @@ import org.springframework.stereotype.Service
 class AuthService(
     private val userRepository: UserRepository,
     private val passwordEncoder: PasswordEncoder,
-    private val jwtService: JwtService // <-- Внедрили генератор токенов
+    private val jwtService: JwtService
 ) {
     fun register(request: RegisterRequest): AuthResponse {
         if (userRepository.existsByEmail(request.email)) {
             throw UserAlreadyExistsException("Email уже занят")
         }
+
         val user = User(
             email = request.email,
+            nickname = request.nickname,
             passwordHash = passwordEncoder.encode(request.password)
-        )
+                ?: throw IllegalStateException("Не удалось захешировать пароль")        )
 
         val savedUser = userRepository.save(user)
 
-        // Генерируем реальный JWT токен
-        val token = jwtService.generateToken(
-            email = savedUser.email,
-            role = savedUser.role,
-            userId = savedUser.id.toString()
-        )
+        // Безопасно извлекаем ID, гарантируя компилятору, что он не null (без использования !!)
+        val userId = savedUser.id ?: throw IllegalStateException("Не удалось получить ID пользователя после сохранения")
+
+        // Теперь userId точно не null, и toString() вернет строгую String
+        val token = jwtService.generateToken(savedUser.email, savedUser.role, userId.toString())
 
         return AuthResponse(
             token = token,
-            user = UserDto(savedUser.id!!, savedUser.email, savedUser.role)
+            user = UserDto(userId, savedUser.email, savedUser.nickname, savedUser.role)
         )
     }
 
@@ -49,16 +50,20 @@ class AuthService(
             throw InvalidCredentialsException("Неверный email или пароль")
         }
 
-        // Генерируем реальный JWT токен
-        val token = jwtService.generateToken(
-            email = user.email,
-            role = user.role,
-            userId = user.id.toString()
-        )
+        val userId = user.id ?: throw IllegalStateException("У пользователя в БД отсутствует ID")
+        val token = jwtService.generateToken(user.email, user.role, userId.toString())
 
         return AuthResponse(
             token = token,
-            user = UserDto(user.id!!, user.email, user.role)
+            user = UserDto(userId, user.email, user.nickname, user.role)
         )
+    }
+
+    fun getCurrentUser(email: String): UserDto {
+        val user = userRepository.findByEmail(email)
+            ?: throw InvalidCredentialsException("Пользователь не найден")
+
+        val userId = user.id ?: throw IllegalStateException("У пользователя в БД отсутствует ID")
+        return UserDto(userId, user.email, user.nickname, user.role)
     }
 }

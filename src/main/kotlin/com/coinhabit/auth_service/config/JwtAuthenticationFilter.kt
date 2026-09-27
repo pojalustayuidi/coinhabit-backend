@@ -22,14 +22,12 @@ class JwtAuthenticationFilter(
     ) {
         val authHeader = request.getHeader("Authorization")
 
-        // 2. Если заголовка нет или он не начинается с "Bearer ", пропускаем запрос дальше
-        // (его заблокирует Spring Security, если эндпоинт закрыт)
+
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response)
             return
         }
 
-        // 3. Достаем сам токен (отрезаем первые 7 символов: "Bearer ")
         val jwt = authHeader.substring(7)
 
         val userEmail = try {
@@ -38,13 +36,10 @@ class JwtAuthenticationFilter(
             null
         }
 
-        // 5. Если email есть, а пользователь еще не авторизован в текущем контексте Spring
         if (userEmail != null && SecurityContextHolder.getContext().authentication == null) {
 
-            // 6. Проверяем валидность токена
             if (jwtService.isTokenValid(jwt)) {
-                // Создаем объект аутентификации. В микросервисах нам не нужно идти в БД,
-                // мы доверяем данным из токена (Stateless подход).
+
                 val authToken = UsernamePasswordAuthenticationToken(
                     userEmail,
                     null,

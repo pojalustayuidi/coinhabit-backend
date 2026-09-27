@@ -31,10 +31,10 @@ class AuthController(
 
     @GetMapping("/me")
     @ResponseStatus(HttpStatus.OK)
-    fun getMe(): Map<String, String> {
+    fun getMe(): UserDto {
         val authentication = SecurityContextHolder.getContext().authentication
         val email = authentication?.name ?: throw RuntimeException("Пользователь не авторизован")
 
-        return mapOf("email" to email)
+        return authService.getCurrentUser(email)
     }
 }
