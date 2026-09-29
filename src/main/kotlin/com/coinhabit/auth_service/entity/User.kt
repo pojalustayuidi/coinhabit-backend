@@ -20,5 +20,8 @@ class User(
     val passwordHash: String,
 
     @Column(nullable = false)
-    val role: String = "USER"
+    val role: String = "USER",
+
+    @OneToMany(mappedBy = "user", cascade = [CascadeType.ALL], orphanRemoval = true)
+    val habits: MutableList<Habit> = mutableListOf()
 )
