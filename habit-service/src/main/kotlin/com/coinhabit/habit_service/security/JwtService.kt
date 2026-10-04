@@ -10,7 +10,7 @@ import javax.crypto.SecretKey
 
 @Service
 class JwtService(
-    @Value("\${jwt.secret}") private val secretKey: String
+    @Value("\${jwt.secret}") private var secretKey: String
 ) {
     private val signingKey: SecretKey
         get() = Keys.hmacShaKeyFor(secretKey.toByteArray())
