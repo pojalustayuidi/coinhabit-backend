@@ -8,4 +8,5 @@ import java.util.UUID
 @Repository
 interface HabitRepository : JpaRepository<Habit, UUID> {
     fun findAllByUserId(userId: UUID): List<Habit>
+    fun findAllByStatus(status: String): List<Habit>
 }
