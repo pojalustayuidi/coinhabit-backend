@@ -22,7 +22,7 @@ class Habit(
     val monthlySpend: BigDecimal,
 
     @Column(nullable = false)
-    val startDate: Instant,
+    var startDate: Instant,
 
     @Column(nullable = false)
     var currentStreakDays: Int = 0,
