@@ -1,0 +1,21 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: habit-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/habit_db
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:230171kom}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  secret: ${JWT_SECRET:8A2F3E485B6D9C1A2F4B7E901A3C5D8F6E2B4A1C3D5F7E9A0B2C4D6E8F1A3B5C}
