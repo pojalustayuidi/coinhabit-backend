@@ -22,6 +22,4 @@ class User(
     @Column(nullable = false)
     val role: String = "USER",
 
-    @OneToMany(mappedBy = "user", cascade = [CascadeType.ALL], orphanRemoval = true)
-    val habits: MutableList<Habit> = mutableListOf()
 )
