@@ -16,6 +16,11 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
 
 jwt:
   secret: ${JWT_SECRET:8A2F3E485B6D9C1A2F4B7E901A3C5D8F6E2B4A1C3D5F7E9A0B2C4D6E8F1A3B5C}

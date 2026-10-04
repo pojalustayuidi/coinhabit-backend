@@ -3,7 +3,9 @@ package com.coinhabit.habit_service.service
 import com.coinhabit.habit_service.dto.HabitRequest
 import com.coinhabit.habit_service.dto.HabitResponse
 import com.coinhabit.habit_service.entity.Habit
+import com.coinhabit.habit_service.event.HabitRelapsedEvent
 import com.coinhabit.habit_service.repository.HabitRepository
+import org.springframework.amqp.rabbit.core.RabbitTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -14,7 +16,8 @@ import java.util.UUID
 
 @Service
 class HabitService(
-    private val habitRepository: HabitRepository
+    private val habitRepository: HabitRepository,
+    private val rabbitTemplate: RabbitTemplate
 ) {
 
     @Transactional
@@ -62,7 +65,6 @@ class HabitService(
         val habit = habitRepository.findById(habitId)
             .orElseThrow { IllegalArgumentException("Привычка не найдена") }
 
-        // Проверка владения привычкой (важное требование безопасности)
         if (habit.userId != userId) {
             throw SecurityException("Нет прав на сброс этой привычки")
         }
@@ -75,8 +77,10 @@ class HabitService(
 
         habitRepository.save(habit)
 
-        // TODO: В будущем добавить Scheduled Job, которая раз в сутки проходит по активным привычкам
-        // и публикует событие HabitDayPassed в RabbitMQ для Savings/Gamification сервисов.
-        // Здесь же (при срыве) будет публиковаться событие HabitRelapsed.
+        // Отправляем событие о срыве в RabbitMQ
+        val event = HabitRelapsedEvent(habitId = habitId, userId = userId)
+        rabbitTemplate.convertAndSend("habit.events", "habit.relapsed", event)
+
+        // TODO: В будущем добавить Scheduled Job, которая раз в сутки будет проходить
     }
 }
