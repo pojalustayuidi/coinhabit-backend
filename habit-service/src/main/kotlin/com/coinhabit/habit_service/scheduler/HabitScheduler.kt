@@ -1,36 +1,93 @@
+
 package com.coinhabit.habit_service.scheduler
 
-import com.coinhabit.habit_service.event.HabitDayPassedEvent
+import com.coinhabit.habit_service.entity.HabitDayOutbox
+import com.coinhabit.habit_service.repository.HabitDayOutboxRepository
 import com.coinhabit.habit_service.repository.HabitRepository
-import org.springframework.amqp.rabbit.core.RabbitTemplate
+import com.coinhabit.habit_service.service.HabitDayPlanner
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import java.nio.charset.StandardCharsets
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.util.UUID
 
 @Component
 class HabitScheduler(
     private val habitRepository: HabitRepository,
-    private val rabbitTemplate: RabbitTemplate
+    private val outboxRepository: HabitDayOutboxRepository
 ) {
 
-    @Scheduled(cron = "0 0 0 * * *")
-    @Transactional(readOnly = true)
+    // Проверяем завершённые дни каждые 5 минут по UTC.
+    @Scheduled(
+        cron = "0 */5 * * * *",
+        zone = "UTC"
+    )
+    @Transactional
     fun processDailyHabits() {
-        val activeHabits = habitRepository.findAllByStatus("active")
-        val now = Instant.now()
+
+        val zoneId = ZoneOffset.UTC
+        val today = LocalDate.now(zoneId)
+
+        val activeHabits =
+            habitRepository.findAllByStatus("active")
 
         activeHabits.forEach { habit ->
-            val actualStreak = ChronoUnit.DAYS.between(habit.startDate, now).toInt()
 
-            val event = HabitDayPassedEvent(
-                habitId = habit.id!!,
-                userId = habit.userId,
-                currentStreakDays = actualStreak
-            )
+            val habitId = requireNotNull(habit.id) {
+                "У привычки отсутствует ID"
+            }
 
-            rabbitTemplate.convertAndSend("habit.events", "habit.day.passed", event)
+            val lastRecordedDay = outboxRepository
+                .findTopByHabitIdOrderBySuccessfulDayDesc(
+                    habitId
+                )
+                ?.successfulDay
+
+            val daysToRecord = HabitDayPlanner
+                .planCompletedDays(
+                    startDate = habit.startDate,
+                    lastRelapseAt = habit.lastRelapseAt,
+                    today = today,
+                    zoneId = zoneId,
+                    lastRecordedDay = lastRecordedDay
+                )
+
+            if (daysToRecord.isEmpty()) {
+                return@forEach
+            }
+
+            val records = daysToRecord.map { day ->
+
+                // Постоянный ID для каждой пары
+                // "привычка + успешная дата".
+                val eventKey =
+                    "habit-day:$habitId:${day.successfulDay}"
+
+                val eventId = UUID.nameUUIDFromBytes(
+                    eventKey.toByteArray(
+                        StandardCharsets.UTF_8
+                    )
+                )
+
+                HabitDayOutbox(
+                    id = eventId,
+                    habitId = habitId,
+                    userId = habit.userId,
+                    successfulDay = day.successfulDay,
+                    currentStreakDays =
+                        day.currentStreakDays,
+
+                    // Сохраняем стоимость привычки
+                    // на момент формирования события.
+                    monthlySpend = habit.monthlySpend,
+
+                    published = false
+                )
+            }
+
+            outboxRepository.saveAll(records)
         }
     }
 }

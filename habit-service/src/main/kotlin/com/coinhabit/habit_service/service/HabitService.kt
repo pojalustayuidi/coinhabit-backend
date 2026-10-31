@@ -1,3 +1,4 @@
+
 package com.coinhabit.habit_service.service
 
 import com.coinhabit.habit_service.dto.HabitRequest
@@ -11,7 +12,8 @@ import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
-import java.time.temporal.ChronoUnit
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.UUID
 
 @Service
@@ -21,38 +23,69 @@ class HabitService(
 ) {
 
     @Transactional
-    fun createHabits(userId: UUID, requests: List<HabitRequest>) {
+    fun createHabits(
+        userId: UUID,
+        requests: List<HabitRequest>
+    ) {
         val now = Instant.now()
-        val habits = requests.map { req ->
+
+        val habits = requests.map { request ->
             Habit(
                 userId = userId,
-                title = req.title,
-                monthlySpend = req.monthlySpend,
+                title = request.title,
+                monthlySpend = request.monthlySpend,
                 startDate = now,
                 currentStreakDays = 0,
-                status = "active"
+                status = "active",
+                completedDaysBeforeCurrentStreak = 0
             )
         }
+
         habitRepository.saveAll(habits)
     }
 
     @Transactional(readOnly = true)
     fun getUserHabits(userId: UUID): List<HabitResponse> {
         val habits = habitRepository.findAllByUserId(userId)
-        val now = Instant.now()
+
+        val zoneId = ZoneOffset.UTC
+        val today = LocalDate.now(zoneId)
 
         return habits.map { habit ->
-            val actualStreak = ChronoUnit.DAYS.between(habit.startDate, now).toInt()
 
-            val dailySpend = habit.monthlySpend.divide(BigDecimal(30), 2, RoundingMode.HALF_UP)
-            val savedAmount = dailySpend.multiply(BigDecimal(actualStreak))
+            val currentStreak = HabitStreakCalculator
+                .calculateCurrentStreak(
+                    startDate = habit.startDate,
+                    lastRelapseAt = habit.lastRelapseAt,
+                    today = today,
+                    zoneId = zoneId
+                )
+
+            val totalDays = HabitStreakCalculator
+                .calculateTotalDays(
+                    completedDaysBeforeCurrentStreak =
+                        habit.completedDaysBeforeCurrentStreak,
+                    currentStreakDays = currentStreak
+                )
+
+            // Временный расчёт экономии.
+            // Позже он перейдёт в Savings Service.
+            val savedAmount = habit.monthlySpend
+                .multiply(BigDecimal.valueOf(totalDays.toLong()))
+                .divide(
+                    BigDecimal("30"),
+                    2,
+                    RoundingMode.HALF_UP
+                )
 
             HabitResponse(
-                id = habit.id!!,
+                id = requireNotNull(habit.id) {
+                    "У привычки отсутствует ID"
+                },
                 title = habit.title,
                 monthlySpend = habit.monthlySpend,
                 startDate = habit.startDate,
-                currentStreakDays = actualStreak,
+                currentStreakDays = currentStreak,
                 status = habit.status,
                 lastRelapseAt = habit.lastRelapseAt,
                 savedAmount = savedAmount
@@ -61,26 +94,63 @@ class HabitService(
     }
 
     @Transactional
-    fun relapseHabit(habitId: UUID, userId: UUID) {
+    fun relapseHabit(
+        habitId: UUID,
+        userId: UUID
+    ) {
         val habit = habitRepository.findById(habitId)
-            .orElseThrow { IllegalArgumentException("Привычка не найдена") }
+            .orElseThrow {
+                IllegalArgumentException("Привычка не найдена")
+            }
 
         if (habit.userId != userId) {
-            throw SecurityException("Нет прав на сброс этой привычки")
+            throw SecurityException(
+                "Нет прав на сброс этой привычки"
+            )
         }
 
         val now = Instant.now()
+        val zoneId = ZoneOffset.UTC
+        val today = LocalDate.ofInstant(now, zoneId)
+
+        // Сколько дней было успешно завершено
+        // до текущего срыва?
+        val completedCurrentStreak = HabitStreakCalculator
+            .calculateCurrentStreak(
+                startDate = habit.startDate,
+                lastRelapseAt = habit.lastRelapseAt,
+                today = today,
+                zoneId = zoneId
+            )
+
+        // Сохраняем накопленный результат.
+        habit.completedDaysBeforeCurrentStreak =
+            HabitStreakCalculator.calculateTotalDays(
+                completedDaysBeforeCurrentStreak =
+                    habit.completedDaysBeforeCurrentStreak,
+                currentStreakDays = completedCurrentStreak
+            )
+
+        // Сброс серии без изменения первоначальной даты.
         habit.currentStreakDays = 0
-        habit.startDate = now
         habit.lastRelapseAt = now
-        habit.status = "relapsed"
+
+        // Привычка остаётся активной:
+        // пользователь продолжает попытку со следующего дня.
+        habit.status = "active"
 
         habitRepository.save(habit)
 
-        // Отправляем событие о срыве в RabbitMQ
-        val event = HabitRelapsedEvent(habitId = habitId, userId = userId)
-        rabbitTemplate.convertAndSend("habit.events", "habit.relapsed", event)
+        // Публикуем событие о срыве в RabbitMQ.
+        val event = HabitRelapsedEvent(
+            habitId = habitId,
+            userId = userId
+        )
 
-        // TODO: В будущем добавить Scheduled Job, которая раз в сутки будет проходить
+        rabbitTemplate.convertAndSend(
+            "habit.events",
+            "habit.relapsed",
+            event
+        )
     }
 }
