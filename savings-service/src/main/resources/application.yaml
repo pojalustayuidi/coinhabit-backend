@@ -1,0 +1,39 @@
+
+server:
+  port: 8082
+
+spring:
+  application:
+    name: savings-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:15432/savings_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:coinhabit}
+    password: ${RABBITMQ_PASSWORD}
+
+    listener:
+      simple:
+        acknowledge-mode: auto
+
+
+        default-requeue-rejected: false
+
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+          max-interval: 5s
