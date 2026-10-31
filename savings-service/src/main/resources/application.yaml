@@ -27,8 +27,6 @@ spring:
     listener:
       simple:
         acknowledge-mode: auto
-
-
         default-requeue-rejected: false
 
         retry:
@@ -37,3 +35,6 @@ spring:
           initial-interval: 1s
           multiplier: 2
           max-interval: 5s
+
+jwt:
+  secret: ${JWT_SECRET}

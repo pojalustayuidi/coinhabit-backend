@@ -22,23 +22,33 @@ repositories {
 }
 
 dependencies {
+	// REST API
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 
+	// PostgreSQL
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	runtimeOnly("org.postgresql:postgresql")
 
+	// RabbitMQ
 	implementation("org.springframework.boot:spring-boot-starter-amqp")
 
+	// Безопасность и валидация
 	implementation("org.springframework.boot:spring-boot-starter-security")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 
+	// JWT — те же версии, что в Auth Service
+	implementation("io.jsonwebtoken:jjwt-api:0.12.5")
+	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.5")
+	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.5")
+
+	// Kotlin и JSON
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
-	// Поддержка LocalDate и других java.time типов
-	// в используемом Jackson 2 конвертере RabbitMQ.
+	// Поддержка LocalDate в сообщениях RabbitMQ
 	implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 
+	// Тестирование
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("org.springframework.security:spring-security-test")
 	testImplementation("org.springframework.amqp:spring-rabbit-test")
