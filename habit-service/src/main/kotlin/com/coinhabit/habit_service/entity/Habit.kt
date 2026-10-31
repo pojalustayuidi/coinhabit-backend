@@ -1,6 +1,12 @@
+
 package com.coinhabit.habit_service.entity
 
-import jakarta.persistence.*
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.GeneratedValue
+import jakarta.persistence.GenerationType
+import jakarta.persistence.Id
+import jakarta.persistence.Table
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.UUID
@@ -21,6 +27,7 @@ class Habit(
     @Column(nullable = false, precision = 10, scale = 2)
     val monthlySpend: BigDecimal,
 
+
     @Column(nullable = false)
     var startDate: Instant,
 
@@ -30,5 +37,11 @@ class Habit(
     @Column(nullable = false)
     var status: String = "active",
 
-    var lastRelapseAt: Instant? = null
+    var lastRelapseAt: Instant? = null,
+
+    @Column(
+        name = "completed_days_before_current_streak",
+        nullable = false
+    )
+    var completedDaysBeforeCurrentStreak: Int = 0
 )
