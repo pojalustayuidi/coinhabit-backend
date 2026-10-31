@@ -4,9 +4,7 @@ package com.coinhabit.habit_service.service
 import com.coinhabit.habit_service.dto.HabitRequest
 import com.coinhabit.habit_service.dto.HabitResponse
 import com.coinhabit.habit_service.entity.Habit
-import com.coinhabit.habit_service.event.HabitRelapsedEvent
 import com.coinhabit.habit_service.repository.HabitRepository
-import org.springframework.amqp.rabbit.core.RabbitTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -19,8 +17,7 @@ import java.util.UUID
 
 @Service
 class HabitService(
-    private val habitRepository: HabitRepository,
-    private val rabbitTemplate: RabbitTemplate
+    private val habitRepository: HabitRepository
 ) {
 
     @Transactional
@@ -230,16 +227,5 @@ class HabitService(
         habit.status = "active"
 
         habitRepository.save(habit)
-
-        val event = HabitRelapsedEvent(
-            habitId = habitId,
-            userId = userId
-        )
-
-        rabbitTemplate.convertAndSend(
-            "habit.events",
-            "habit.relapsed",
-            event
-        )
     }
 }

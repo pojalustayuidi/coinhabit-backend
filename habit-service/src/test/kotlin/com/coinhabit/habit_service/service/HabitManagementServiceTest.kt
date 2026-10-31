@@ -11,9 +11,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
-import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
-import org.springframework.amqp.rabbit.core.RabbitTemplate
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -32,14 +30,7 @@ class HabitManagementServiceTest {
         HabitRepository::class.java
     )
 
-    private val rabbitTemplate = mock(
-        RabbitTemplate::class.java
-    )
-
-    private val service = HabitService(
-        repository,
-        rabbitTemplate
-    )
+    private val service = HabitService(repository)
 
     private fun createHabit(
         status: String = "active"
@@ -94,7 +85,6 @@ class HabitManagementServiceTest {
         assertEquals("active", habit.status)
 
         verify(repository).save(habit)
-        verifyNoInteractions(rabbitTemplate)
     }
 
     @Test
@@ -138,8 +128,6 @@ class HabitManagementServiceTest {
             "Привычка не найдена",
             exception.message
         )
-
-        verifyNoInteractions(rabbitTemplate)
     }
 
     @Test
@@ -251,7 +239,6 @@ class HabitManagementServiceTest {
         )
 
         verify(repository).save(habit)
-        verifyNoInteractions(rabbitTemplate)
     }
 
     @Test
@@ -301,8 +288,6 @@ class HabitManagementServiceTest {
                 "Привычка не найдена"
             ) == true
         )
-
-        verifyNoInteractions(rabbitTemplate)
     }
 
     @Test
@@ -318,7 +303,6 @@ class HabitManagementServiceTest {
         }
 
         verify(repository, never()).save(habit)
-        verifyNoInteractions(rabbitTemplate)
     }
 
     @Test
@@ -338,7 +322,5 @@ class HabitManagementServiceTest {
             "Привычка не найдена",
             exception.message
         )
-
-        verifyNoInteractions(rabbitTemplate)
     }
 }
