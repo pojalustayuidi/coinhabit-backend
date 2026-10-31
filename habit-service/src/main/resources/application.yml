@@ -26,5 +26,11 @@ spring:
     username: coinhabit
     password: ${RABBITMQ_PASSWORD}
 
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
+    template:
+      mandatory: true
+
 jwt:
   secret: ${JWT_SECRET}
