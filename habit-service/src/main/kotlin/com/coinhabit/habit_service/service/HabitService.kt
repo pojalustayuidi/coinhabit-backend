@@ -14,6 +14,7 @@ import java.math.RoundingMode
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.util.NoSuchElementException
 import java.util.UUID
 
 @Service
@@ -53,13 +54,16 @@ class HabitService(
 
         return habits.map { habit ->
 
-            val currentStreak = HabitStreakCalculator
-                .calculateCurrentStreak(
+            val currentStreak = if (habit.status == "archived") {
+                habit.currentStreakDays
+            } else {
+                HabitStreakCalculator.calculateCurrentStreak(
                     startDate = habit.startDate,
                     lastRelapseAt = habit.lastRelapseAt,
                     today = today,
                     zoneId = zoneId
                 )
+            }
 
             val totalDays = HabitStreakCalculator
                 .calculateTotalDays(
@@ -68,8 +72,8 @@ class HabitService(
                     currentStreakDays = currentStreak
                 )
 
-            // Временный расчёт экономии.
-            // Позже он перейдёт в Savings Service.
+            // Временная оценка экономии.
+            // Подтверждённая сумма хранится в Savings Service.
             val savedAmount = habit.monthlySpend
                 .multiply(BigDecimal.valueOf(totalDays.toLong()))
                 .divide(
@@ -94,13 +98,102 @@ class HabitService(
     }
 
     @Transactional
+    fun updateHabit(
+        habitId: UUID,
+        userId: UUID,
+        request: HabitRequest
+    ) {
+        val habit = habitRepository.findById(habitId)
+            .orElseThrow {
+                NoSuchElementException("Привычка не найдена")
+            }
+
+        if (habit.userId != userId) {
+            throw SecurityException(
+                "Нет прав на редактирование этой привычки"
+            )
+        }
+
+        require(habit.status == "active") {
+            "Нельзя редактировать архивную привычку"
+        }
+
+        val normalizedTitle = request.title.trim()
+
+        require(normalizedTitle.isNotBlank()) {
+            "Название привычки не может быть пустым"
+        }
+
+        require(normalizedTitle.length <= 120) {
+            "Название привычки не может быть длиннее 120 символов"
+        }
+
+        val normalizedAmount = request.monthlySpend
+            .setScale(2, RoundingMode.HALF_UP)
+
+        require(normalizedAmount > BigDecimal.ZERO) {
+            "Сумма трат должна быть больше нуля"
+        }
+
+        require(normalizedAmount.precision() <= 10) {
+            "Сумма трат слишком большая"
+        }
+
+        habit.title = normalizedTitle
+        habit.monthlySpend = normalizedAmount
+
+        habitRepository.save(habit)
+    }
+
+    @Transactional
+    fun archiveHabit(
+        habitId: UUID,
+        userId: UUID
+    ) {
+        val habit = habitRepository.findById(habitId)
+            .orElseThrow {
+                NoSuchElementException("Привычка не найдена")
+            }
+
+        if (habit.userId != userId) {
+            throw SecurityException(
+                "Нет прав на архивирование этой привычки"
+            )
+        }
+
+        // Повторное архивирование ничего не меняет.
+        if (habit.status == "archived") {
+            return
+        }
+
+        require(habit.status == "active") {
+            "Можно архивировать только активную привычку"
+        }
+
+        val now = Instant.now()
+        val today = LocalDate.ofInstant(now, ZoneOffset.UTC)
+
+        habit.currentStreakDays =
+            HabitStreakCalculator.calculateCurrentStreak(
+                startDate = habit.startDate,
+                lastRelapseAt = habit.lastRelapseAt,
+                today = today,
+                zoneId = ZoneOffset.UTC
+            )
+
+        habit.status = "archived"
+
+        habitRepository.save(habit)
+    }
+
+    @Transactional
     fun relapseHabit(
         habitId: UUID,
         userId: UUID
     ) {
         val habit = habitRepository.findById(habitId)
             .orElseThrow {
-                IllegalArgumentException("Привычка не найдена")
+                NoSuchElementException("Привычка не найдена")
             }
 
         if (habit.userId != userId) {
@@ -109,12 +202,14 @@ class HabitService(
             )
         }
 
+        require(habit.status == "active") {
+            "Нельзя сбросить архивную привычку"
+        }
+
         val now = Instant.now()
         val zoneId = ZoneOffset.UTC
         val today = LocalDate.ofInstant(now, zoneId)
 
-        // Сколько дней было успешно завершено
-        // до текущего срыва?
         val completedCurrentStreak = HabitStreakCalculator
             .calculateCurrentStreak(
                 startDate = habit.startDate,
@@ -123,7 +218,6 @@ class HabitService(
                 zoneId = zoneId
             )
 
-        // Сохраняем накопленный результат.
         habit.completedDaysBeforeCurrentStreak =
             HabitStreakCalculator.calculateTotalDays(
                 completedDaysBeforeCurrentStreak =
@@ -131,17 +225,12 @@ class HabitService(
                 currentStreakDays = completedCurrentStreak
             )
 
-        // Сброс серии без изменения первоначальной даты.
         habit.currentStreakDays = 0
         habit.lastRelapseAt = now
-
-        // Привычка остаётся активной:
-        // пользователь продолжает попытку со следующего дня.
         habit.status = "active"
 
         habitRepository.save(habit)
 
-        // Публикуем событие о срыве в RabbitMQ.
         val event = HabitRelapsedEvent(
             habitId = habitId,
             userId = userId

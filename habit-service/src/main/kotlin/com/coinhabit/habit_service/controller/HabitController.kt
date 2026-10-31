@@ -1,3 +1,4 @@
+
 package com.coinhabit.habit_service.controller
 
 import com.coinhabit.habit_service.dto.HabitRequest
@@ -20,15 +21,22 @@ class HabitController(
 ) {
 
     private fun getCurrentUserId(): UUID {
-        val authentication = SecurityContextHolder.getContext().authentication
+        val authentication =
+            SecurityContextHolder.getContext().authentication
+
         val userIdString = authentication?.principal as? String
-            ?: throw SecurityException("Пользователь не авторизован")
+            ?: throw SecurityException(
+                "Пользователь не авторизован"
+            )
+
         return UUID.fromString(userIdString)
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    fun createHabits(@RequestBody @Valid requests: List<@Valid HabitRequest>) {
+    fun createHabits(
+        @RequestBody @Valid requests: List<@Valid HabitRequest>
+    ) {
         val userId = getCurrentUserId()
         habitService.createHabits(userId, requests)
     }
@@ -40,9 +48,39 @@ class HabitController(
         return habitService.getUserHabits(userId)
     }
 
+    @PutMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun updateHabit(
+        @PathVariable id: UUID,
+        @RequestBody @Valid request: HabitRequest
+    ) {
+        val userId = getCurrentUserId()
+
+        habitService.updateHabit(
+            habitId = id,
+            userId = userId,
+            request = request
+        )
+    }
+
+    @PatchMapping("/{id}/archive")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun archiveHabit(
+        @PathVariable id: UUID
+    ) {
+        val userId = getCurrentUserId()
+
+        habitService.archiveHabit(
+            habitId = id,
+            userId = userId
+        )
+    }
+
     @PostMapping("/{id}/relapse")
     @ResponseStatus(HttpStatus.OK)
-    fun relapseHabit(@PathVariable id: UUID) {
+    fun relapseHabit(
+        @PathVariable id: UUID
+    ) {
         val userId = getCurrentUserId()
         habitService.relapseHabit(id, userId)
     }

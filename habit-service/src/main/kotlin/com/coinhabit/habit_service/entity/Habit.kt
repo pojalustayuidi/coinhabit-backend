@@ -22,11 +22,10 @@ class Habit(
     val userId: UUID,
 
     @Column(nullable = false)
-    val title: String,
+    var title: String,
 
     @Column(nullable = false, precision = 10, scale = 2)
-    val monthlySpend: BigDecimal,
-
+    var monthlySpend: BigDecimal,
 
     @Column(nullable = false)
     var startDate: Instant,
