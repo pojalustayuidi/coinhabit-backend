@@ -40,3 +40,4 @@ out/
 .kotlin
 # Environments
 .env
+/auth-service/local.properties

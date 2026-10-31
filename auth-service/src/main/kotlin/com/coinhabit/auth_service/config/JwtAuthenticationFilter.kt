@@ -1,5 +1,7 @@
+
 package com.coinhabit.auth_service.config
 
+import com.coinhabit.auth_service.repository.UserRepository
 import com.coinhabit.auth_service.service.JwtService
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
@@ -12,7 +14,8 @@ import org.springframework.web.filter.OncePerRequestFilter
 
 @Component
 class JwtAuthenticationFilter(
-    private val jwtService: JwtService
+    private val jwtService: JwtService,
+    private val userRepository: UserRepository
 ) : OncePerRequestFilter() {
 
     override fun doFilterInternal(
@@ -22,31 +25,52 @@ class JwtAuthenticationFilter(
     ) {
         val authHeader = request.getHeader("Authorization")
 
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (
+            authHeader == null ||
+            !authHeader.startsWith("Bearer ")
+        ) {
             filterChain.doFilter(request, response)
             return
         }
 
-        val jwt = authHeader.substring(7)
+        val token = authHeader.substring(7).trim()
 
-        val userEmail = try {
-            jwtService.extractEmail(jwt)
-        } catch (e: Exception) {
-            null
-        }
+        if (
+            token.isNotEmpty() &&
+            SecurityContextHolder.getContext().authentication == null
+        ) {
+            val identity = jwtService.extractIdentity(token)
 
-        if (userEmail != null && SecurityContextHolder.getContext().authentication == null) {
-
-            if (jwtService.isTokenValid(jwt)) {
-
-                val authToken = UsernamePasswordAuthenticationToken(
-                    userEmail,
-                    null,
-                    listOf(SimpleGrantedAuthority("ROLE_USER"))
+            if (identity != null) {
+                val user = userRepository.findByEmail(
+                    identity.email
                 )
 
-                SecurityContextHolder.getContext().authentication = authToken
+                if (
+                    user != null &&
+                    user.id == identity.userId &&
+                    user.emailVerified == true
+                ) {
+                    val role = if (
+                        user.role.startsWith("ROLE_")
+                    ) {
+                        user.role
+                    } else {
+                        "ROLE_${user.role}"
+                    }
+
+                    val authentication =
+                        UsernamePasswordAuthenticationToken(
+                            user.email,
+                            null,
+                            listOf(
+                                SimpleGrantedAuthority(role)
+                            )
+                        )
+
+                    SecurityContextHolder.getContext()
+                        .authentication = authentication
+                }
             }
         }
 
