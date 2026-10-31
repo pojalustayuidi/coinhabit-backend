@@ -19,9 +19,7 @@ class HabitScheduler(
     private val outboxRepository: HabitDayOutboxRepository
 ) {
 
-    // Каждые пять минут по UTC.
-    // После перезапуска можно восстановить
-    // пропущенные завершённые дни.
+    // Проверяем завершённые дни каждые 5 минут по UTC.
     @Scheduled(
         cron = "0 */5 * * * *",
         zone = "UTC"
@@ -41,14 +39,12 @@ class HabitScheduler(
                 "У привычки отсутствует ID"
             }
 
-            // Последний день, записанный в журнал.
             val lastRecordedDay = outboxRepository
                 .findTopByHabitIdOrderBySuccessfulDayDesc(
                     habitId
                 )
                 ?.successfulDay
 
-            // Получаем только недостающие дни.
             val daysToRecord = HabitDayPlanner
                 .planCompletedDays(
                     startDate = habit.startDate,
@@ -64,8 +60,8 @@ class HabitScheduler(
 
             val records = daysToRecord.map { day ->
 
-                // Один и тот же день всегда получает
-                // одинаковый ID события.
+                // Постоянный ID для каждой пары
+                // "привычка + успешная дата".
                 val eventKey =
                     "habit-day:$habitId:${day.successfulDay}"
 
@@ -82,6 +78,11 @@ class HabitScheduler(
                     successfulDay = day.successfulDay,
                     currentStreakDays =
                         day.currentStreakDays,
+
+                    // Сохраняем стоимость привычки
+                    // на момент формирования события.
+                    monthlySpend = habit.monthlySpend,
+
                     published = false
                 )
             }

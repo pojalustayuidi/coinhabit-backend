@@ -38,8 +38,11 @@ class HabitDayOutboxPublisher(
                     habitId = record.habitId,
                     userId = record.userId,
                     successfulDay = record.successfulDay,
-                    currentStreakDays =
-                        record.currentStreakDays
+                    currentStreakDays = record.currentStreakDays,
+
+                    // Передаём стоимость привычки
+                    // из сохранённого события Outbox.
+                    monthlySpend = record.monthlySpend
                 )
 
                 val correlationData = CorrelationData(
@@ -53,6 +56,7 @@ class HabitDayOutboxPublisher(
                     correlationData
                 )
 
+                // Ожидаем подтверждение от RabbitMQ.
                 val confirm = correlationData.future.get(
                     10,
                     TimeUnit.SECONDS
@@ -60,13 +64,14 @@ class HabitDayOutboxPublisher(
 
                 if (!confirm.ack) {
                     logger.warn(
-                        "RabbitMQ не подтвердил событие {}: {}",
-                        record.id,
-                        confirm.reason
+                        "RabbitMQ не подтвердил событие {}",
+                        record.id
                     )
                     continue
                 }
 
+                // Проверяем, не вернул ли RabbitMQ
+                // сообщение из-за отсутствия маршрута.
                 val returned = correlationData.returned
 
                 if (returned != null) {
@@ -78,13 +83,16 @@ class HabitDayOutboxPublisher(
                     continue
                 }
 
+                // Подтверждённое событие отмечаем
+                // опубликованным в PostgreSQL.
                 record.published = true
                 outboxRepository.save(record)
 
                 logger.info(
-                    "Опубликован успешный день {} привычки {}",
+                    "Опубликован успешный день {} привычки {}, monthlySpend={}",
                     record.successfulDay,
-                    record.habitId
+                    record.habitId,
+                    record.monthlySpend
                 )
 
             } catch (exception: InterruptedException) {

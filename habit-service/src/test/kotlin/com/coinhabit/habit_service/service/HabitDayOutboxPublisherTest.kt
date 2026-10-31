@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.doAnswer
@@ -18,6 +19,7 @@ import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.springframework.amqp.rabbit.connection.CorrelationData
 import org.springframework.amqp.rabbit.core.RabbitTemplate
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.UUID
 
@@ -46,10 +48,9 @@ class HabitDayOutboxPublisherTest {
         userId = UUID.fromString(
             "00000000-0000-4000-8000-000000000303"
         ),
-        successfulDay = LocalDate.of(
-            2026, 10, 30
-        ),
+        successfulDay = LocalDate.of(2026, 10, 30),
         currentStreakDays = 1,
+        monthlySpend = BigDecimal("3000.00"),
         published = false
     )
 
@@ -63,7 +64,8 @@ class HabitDayOutboxPublisherTest {
             correlationData.future.complete(
                 CorrelationData.Confirm(
                     ack,
-                    if (ack) null else "Broker rejected publication"
+                    if (ack) null
+                    else "Broker rejected publication"
                 )
             )
 
@@ -91,8 +93,38 @@ class HabitDayOutboxPublisherTest {
         publisher.publishPendingEvents()
 
         assertTrue(record.published)
-
         verify(repository).save(record)
+
+        // Проверяем фактическое содержимое
+        // события, переданного в RabbitMQ.
+        val eventCaptor = ArgumentCaptor.forClass(
+            HabitDayPassedEvent::class.java
+        )
+
+        verify(rabbitTemplate).convertAndSend(
+            eq("habit.events"),
+            eq("habit.day.passed"),
+            eventCaptor.capture(),
+            any(CorrelationData::class.java)
+        )
+
+        val sentEvent = eventCaptor.value
+
+        assertEquals(record.id, sentEvent.eventId)
+        assertEquals(record.habitId, sentEvent.habitId)
+        assertEquals(record.userId, sentEvent.userId)
+        assertEquals(
+            record.successfulDay,
+            sentEvent.successfulDay
+        )
+        assertEquals(
+            record.currentStreakDays,
+            sentEvent.currentStreakDays
+        )
+        assertEquals(
+            BigDecimal("3000.00"),
+            sentEvent.monthlySpend
+        )
     }
 
     @Test

@@ -6,6 +6,7 @@ import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
+import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
@@ -37,6 +38,14 @@ class HabitDayOutbox(
 
     @Column(name = "current_streak_days", nullable = false)
     val currentStreakDays: Int,
+
+    @Column(
+        name = "monthly_spend",
+        nullable = false,
+        precision = 10,
+        scale = 2
+    )
+    val monthlySpend: BigDecimal,
 
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now(),
