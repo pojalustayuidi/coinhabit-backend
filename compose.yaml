@@ -10,6 +10,11 @@ services:
       POSTGRES_DB: coinhabit_auth
     ports:
       - "127.0.0.1:15432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d coinhabit_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql:ro
@@ -24,8 +29,125 @@ services:
     ports:
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+
+  # Also runs against pre-existing postgres volumes (init scripts only run once).
+  init-databases:
+    image: postgres:17-alpine
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - ./init-db.sql:/init-db.sql:ro
+    command: ["psql", "-h", "postgres", "-U", "postgres", "-d", "coinhabit_auth", "-v", "ON_ERROR_STOP=1", "-f", "/init-db.sql"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  auth-service:
+    build:
+      context: .
+      args:
+        SERVICE: auth-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/coinhabit_auth
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      JWT_GUEST_EXPIRATION: ${JWT_GUEST_EXPIRATION:-604800000}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      SMTP_STARTTLS_REQUIRED: ${SMTP_STARTTLS_REQUIRED:-false}
+      MAIL_FROM: ${MAIL_FROM:-noreply@coinhabit.local}
+      VERIFICATION_URL: ${VERIFICATION_URL:-http://localhost:8080/api/auth/verify-email}
+    ports:
+      - "8080:8080"
+    depends_on:
+      init-databases:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
+  habit-service:
+    build:
+      context: .
+      args:
+        SERVICE: habit-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/habit_db
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      JWT_GUEST_EXPIRATION: ${JWT_GUEST_EXPIRATION:-604800000}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      SMTP_STARTTLS_REQUIRED: ${SMTP_STARTTLS_REQUIRED:-false}
+      MAIL_FROM: ${MAIL_FROM:-noreply@coinhabit.local}
+      VERIFICATION_URL: ${VERIFICATION_URL:-http://localhost:8080/api/auth/verify-email}
+    ports:
+      - "8081:8081"
+    depends_on:
+      init-databases:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
+  savings-service:
+    build:
+      context: .
+      args:
+        SERVICE: savings-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/savings_db
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      JWT_GUEST_EXPIRATION: ${JWT_GUEST_EXPIRATION:-604800000}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      SMTP_STARTTLS_REQUIRED: ${SMTP_STARTTLS_REQUIRED:-false}
+      MAIL_FROM: ${MAIL_FROM:-noreply@coinhabit.local}
+      VERIFICATION_URL: ${VERIFICATION_URL:-http://localhost:8080/api/auth/verify-email}
+    ports:
+      - "8082:8082"
+    depends_on:
+      init-databases:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    profiles: ["mail"]
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 
 volumes:
   postgres_data:
