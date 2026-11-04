@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.nio.charset.StandardCharsets
 import java.util.UUID
+import java.util.Date
 import javax.crypto.SecretKey
 
 @Service
@@ -28,6 +29,8 @@ class JwtService(
             .parseSignedClaims(token)
             .payload
 
+
+        require(claims.expiration?.after(Date()) == true) { "JWT expiry required" }
 
         val userId = claims.get(
             "userId",

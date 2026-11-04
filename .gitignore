@@ -41,3 +41,7 @@ out/
 # Environments
 .env
 /auth-service/local.properties
+
+# Python verification artifacts
+__pycache__/
+*.pyc

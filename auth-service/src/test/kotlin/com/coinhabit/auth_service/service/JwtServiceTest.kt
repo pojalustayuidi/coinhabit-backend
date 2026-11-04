@@ -28,7 +28,7 @@ class JwtServiceTest {
         val email = "tester@example.com"
 
         val token = jwtService.generateToken(
-            email = email,
+            subject = email,
             role = "USER",
             userId = userId.toString()
         )
@@ -36,7 +36,7 @@ class JwtServiceTest {
         val identity = jwtService.extractIdentity(token)
 
         assertNotNull(identity)
-        assertEquals(email, identity?.email)
+        assertEquals(email, identity?.subject)
         assertEquals(userId, identity?.userId)
     }
 
@@ -48,7 +48,7 @@ class JwtServiceTest {
         )
 
         val token = anotherJwtService.generateToken(
-            email = "tester@example.com",
+            subject = "tester@example.com",
             role = "USER",
             userId = UUID.randomUUID().toString()
         )
@@ -59,16 +59,12 @@ class JwtServiceTest {
 
     @Test
     fun `expired token is rejected`() {
-        val expiredJwtService = JwtService(
-            secretKey = testSecret,
-            jwtExpiration = -60_000L
-        )
-
-        val token = expiredJwtService.generateToken(
-            email = "tester@example.com",
-            role = "USER",
-            userId = UUID.randomUUID().toString()
-        )
+        val token = Jwts.builder()
+            .subject("tester@example.com")
+            .claim("userId", UUID.randomUUID().toString())
+            .expiration(Date(System.currentTimeMillis() - 60_000))
+            .signWith(Keys.hmacShaKeyFor(testSecret.toByteArray(StandardCharsets.UTF_8)))
+            .compact()
 
         assertNull(jwtService.extractIdentity(token))
         assertFalse(jwtService.isTokenValid(token))

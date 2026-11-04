@@ -8,13 +8,17 @@ import com.coinhabit.auth_service.dto.UserDto
 import com.coinhabit.auth_service.service.AuthService
 import com.coinhabit.auth_service.service.EmailVerificationService
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
+import java.util.UUID
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.server.ResponseStatusException
 
 @RestController
 @RequestMapping("/api/auth")
@@ -28,14 +32,20 @@ class AuthController(
     @ResponseStatus(HttpStatus.CREATED)
     fun register(
         @Valid @RequestBody request: RegisterRequest
-    ): RegistrationResponse {
+    ): AuthResponse = authService.register(request)
 
-        val user = authService.register(request)
+    @PostMapping("/guest")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun guest(request: HttpServletRequest): AuthResponse = authService.createGuest(request.remoteAddr)
 
-        return RegistrationResponse(
-            message = "Регистрация успешна. Проверьте почту для подтверждения email.",
-            user = user
-        )
+    @PostMapping("/guest/upgrade")
+    fun upgrade(@Valid @RequestBody request: RegisterRequest): AuthResponse =
+        authService.upgradeGuest(currentUserId(), request)
+
+    @PostMapping("/request-verification")
+    fun requestVerification(): Map<String, String> {
+        authService.requestVerification(currentUserId())
+        return mapOf("message" to "Запрос принят. При отсутствии подтверждения будет предпринята отправка письма")
     }
 
     @PostMapping("/login")
@@ -88,25 +98,19 @@ class AuthController(
     @GetMapping("/me")
     @ResponseStatus(HttpStatus.OK)
     fun getMe(): UserDto {
-        val authentication =
-            SecurityContextHolder.getContext().authentication
+        return authService.getCurrentUser(currentUserId())
+    }
 
-        val email = authentication?.name
-            ?: throw RuntimeException(
-                "Пользователь не авторизован"
-            )
-
-        return authService.getCurrentUser(email)
+    private fun currentUserId(): UUID {
+        val authentication = SecurityContextHolder.getContext().authentication
+            ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED)
+        return UUID.fromString(authentication.name)
     }
 }
-
-data class RegistrationResponse(
-    val message: String,
-    val user: UserDto
-)
 
 data class ResendVerificationRequest(
     @field:NotBlank(message = "Email не может быть пустым")
     @field:Email(message = "Некорректный формат email")
+    @field:Size(max = 254)
     val email: String
 )

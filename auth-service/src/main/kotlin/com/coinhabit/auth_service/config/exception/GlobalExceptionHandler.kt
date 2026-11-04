@@ -3,8 +3,10 @@ package com.coinhabit.auth_service.exception
 
 import com.coinhabit.auth_service.dto.ErrorResponse
 import org.slf4j.LoggerFactory
-import org.springframework.http.HttpStatus
+import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.mail.MailException
+import org.springframework.http.HttpStatus
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
@@ -15,6 +17,23 @@ class GlobalExceptionHandler {
 
     private val logger =
         LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
+
+    @ExceptionHandler(DataIntegrityViolationException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun handleIntegrity(e: DataIntegrityViolationException) =
+        ErrorResponse(409, "Email уже занят или конфликт состояния аккаунта")
+
+    @ExceptionHandler(AccountStateException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun handleState(e: AccountStateException) = ErrorResponse(409, e.message)
+
+    @ExceptionHandler(GuestRateLimitException::class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    fun handleLimit(e: GuestRateLimitException) = ErrorResponse(429, e.message)
+
+    @ExceptionHandler(IllegalArgumentException::class, HttpMessageNotReadableException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun handleBadRequest(e: Exception) = ErrorResponse(400, "Некорректные данные запроса")
 
     @ExceptionHandler(UserAlreadyExistsException::class)
     @ResponseStatus(HttpStatus.CONFLICT)

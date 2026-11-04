@@ -6,6 +6,7 @@ import io.jsonwebtoken.security.Keys
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.util.Date
+import java.util.UUID
 import javax.crypto.SecretKey
 
 @Service
@@ -16,12 +17,14 @@ class JwtService(
         get() = Keys.hmacShaKeyFor(secretKey.toByteArray())
 
     fun extractUserId(token: String): String {
-        return extractAllClaims(token).get("userId", String::class.java)
+        val claims = extractAllClaims(token)
+        require(claims.expiration?.after(Date()) == true) { "JWT expiry required" }
+        return UUID.fromString(claims.get("userId", String::class.java)).toString()
     }
 
     fun isTokenValid(token: String): Boolean {
         return try {
-            !extractAllClaims(token).expiration.before(Date())
+            extractAllClaims(token).expiration?.after(Date()) == true
         } catch (e: Exception) {
             false
         }

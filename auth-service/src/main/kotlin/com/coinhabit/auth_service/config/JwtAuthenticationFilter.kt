@@ -42,14 +42,12 @@ class JwtAuthenticationFilter(
             val identity = jwtService.extractIdentity(token)
 
             if (identity != null) {
-                val user = userRepository.findByEmail(
-                    identity.email
-                )
+                val user = userRepository.findById(identity.userId).orElse(null)
 
                 if (
                     user != null &&
                     user.id == identity.userId &&
-                    user.emailVerified == true
+                    (identity.subject == user.id.toString() || identity.subject == user.email)
                 ) {
                     val role = if (
                         user.role.startsWith("ROLE_")
@@ -61,7 +59,7 @@ class JwtAuthenticationFilter(
 
                     val authentication =
                         UsernamePasswordAuthenticationToken(
-                            user.email,
+                            user.id.toString(),
                             null,
                             listOf(
                                 SimpleGrantedAuthority(role)
