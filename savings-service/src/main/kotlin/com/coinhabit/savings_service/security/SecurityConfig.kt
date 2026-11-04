@@ -35,6 +35,8 @@ class SecurityConfig {
             }
             .authorizeHttpRequests { requests ->
                 requests
+                    .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR)
+                    .permitAll()
                     .requestMatchers("/api/savings/**")
                     .authenticated()
                     .anyRequest()
