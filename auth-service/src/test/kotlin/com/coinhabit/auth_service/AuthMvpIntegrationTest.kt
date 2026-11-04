@@ -63,7 +63,7 @@ class AuthMvpIntegrationTest {
         postJson("login", """{"email":"$email","password":"password123"}""")
         verifyNoInteractions(sender)
         postJson("request-verification", "{}", token)
-        verify(sender).sendVerificationEmail(eq(email), anyString())
+        verify(sender).sendVerificationEmail((eq(email) ?: ""), anyString())
         // A failed send must not undo account creation or prevent another login.
         postJson("login", """{"email":"$email","password":"password123"}""")
     }
@@ -76,9 +76,9 @@ class AuthMvpIntegrationTest {
         verifyNoInteractions(sender)
         postJson("request-verification", "{}", token)
         val captured = ArgumentCaptor.forClass(String::class.java)
-        verify(sender).sendVerificationEmail(eq(email), captured.capture())
+        verify(sender).sendVerificationEmail((eq(email) ?: ""), (captured.capture() ?: ""))
         postJson("request-verification", "{}", token)
-        verify(sender, times(1)).sendVerificationEmail(eq(email), anyString())
+        verify(sender, times(1)).sendVerificationEmail((eq(email) ?: ""), anyString())
         mvc.perform(get("/api/auth/verify-email").param("token", captured.value)).andExpect(status().isOk)
         mvc.perform(get("/api/auth/verify-email").param("token", captured.value)).andExpect(status().isBadRequest)
         mvc.perform(get("/api/auth/me").header("Authorization", "Bearer $token"))
