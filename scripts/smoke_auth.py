@@ -102,7 +102,7 @@ def main():
     assert upgraded["user"]["id"] == owner_id and not upgraded["user"]["isGuest"]
     registered_token = upgraded["token"]
     assert call(8081, "GET", "/api/habits", token=registered_token)[0]["id"] == habit_id
-    assert call(8082, "GET", f"/api/savings/goals/{goal_id}", token=registered_token)["id"] == goal_id
+    assert call(8082, "GET", f"/api/savings/goals/{goal_id}", token=registered_token)["goalId"] == goal_id
     assert call(8082, "GET", "/api/savings/me", token=registered_token)["totalSaved"] == 100
     assert call(8080, "GET", "/api/auth/me", token=other)["isGuest"]
     call(8080, "POST", "/api/auth/login", {"email": credentials["email"], "password": "password123"})
