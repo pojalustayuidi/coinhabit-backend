@@ -1,6 +1,9 @@
 package com.coinhabit.auth_service.service
 
-import com.coinhabit.auth_service.dto.*
+import com.coinhabit.auth_service.dto.AuthResponse
+import com.coinhabit.auth_service.dto.LoginRequest
+import com.coinhabit.auth_service.dto.RegisterRequest
+import com.coinhabit.auth_service.dto.UserDto
 import com.coinhabit.auth_service.entity.User
 import com.coinhabit.auth_service.exception.InvalidCredentialsException
 import com.coinhabit.auth_service.exception.UserAlreadyExistsException
@@ -25,28 +28,32 @@ class AuthService(
     private val verificationEmailRateLimiter: VerificationEmailRateLimiter,
     private val guestCreationRateLimiter: GuestCreationRateLimiter
 ) {
+    private val logger = LoggerFactory.getLogger(AuthService::class.java)
+
     @Transactional
     fun register(request: RegisterRequest): AuthResponse {
         val email = normalizeEmail(request.email)
         checkEmailAvailable(email)
-        val user = userRepository.saveAndFlush(User(
-            email = email,
-            nickname = request.nickname.trim(),
-            passwordHash = hashPassword(request.password),
-            emailVerified = false
-        ))
+        val user = userRepository.saveAndFlush(
+            User(
+                email = email,
+                nickname = request.nickname.trim(),
+                passwordHash = hashPassword(request.password)
+            )
+        )
         return authorize(user)
     }
 
     @Transactional
     fun createGuest(clientAddress: String): AuthResponse {
         guestCreationRateLimiter.acquire(clientAddress)
-        return authorize(userRepository.saveAndFlush(User(nickname = "Гость", guest = true)))
+        val guest = userRepository.saveAndFlush(User(nickname = "Гость", guest = true))
+        return authorize(guest)
     }
 
     @Transactional
     fun upgradeGuest(userId: UUID, request: RegisterRequest): AuthResponse {
-        // Serializes concurrent upgrades; no cross-service copy or account merging.
+        // Блокировка не даёт двум запросам одновременно зарегистрировать одного гостя.
         val user = userRepository.findForUpdate(userId)
             ?: throw InvalidCredentialsException("Пользователь не найден")
         if (!user.guest) throw AccountStateException("Аккаунт уже зарегистрирован")
@@ -102,9 +109,7 @@ class AuthService(
                 try {
                     verificationEmailSender.sendVerificationEmail(normalized, token)
                 } catch (_: Exception) {
-                    // Never log the address, raw token, or SMTP credentials.
-                    LoggerFactory.getLogger(AuthService::class.java)
-                        .warn("Verification email delivery failed; user may retry after cooldown")
+                    logger.warn("Не удалось отправить письмо подтверждения")
                 }
             }
         })
@@ -117,16 +122,21 @@ class AuthService(
     }
 
     private fun hashPassword(password: String): String {
-        // BCrypt truncates at 72 bytes, not 72 Unicode characters.
+        // Ограничение BCrypt считается в байтах UTF-8, а не в символах.
         require(password.toByteArray(Charsets.UTF_8).size <= 72) { "Пароль длиннее 72 байт UTF-8" }
         return requireNotNull(passwordEncoder.encode(password))
     }
 
-    private fun authorize(user: User) = AuthResponse(
-        token = jwtService.generateToken(requireNotNull(user.id).toString(), user.role,
-            requireNotNull(user.id).toString(), user.guest),
-        user = toDto(user)
-    )
+    private fun authorize(user: User): AuthResponse {
+        val userId = requireNotNull(user.id).toString()
+        val token = jwtService.generateToken(
+            subject = userId,
+            role = user.role,
+            userId = userId,
+            guest = user.guest
+        )
+        return AuthResponse(token, toDto(user))
+    }
 
     private fun toDto(user: User) = UserDto(
         id = requireNotNull(user.id),

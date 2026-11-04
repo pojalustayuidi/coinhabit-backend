@@ -2,7 +2,7 @@ name: Backend MVP auth
 on:
   pull_request:
   push:
-    branches: [main, feat/android-mvp-auth]
+    branches: [main]
 permissions:
   contents: read
 jobs:

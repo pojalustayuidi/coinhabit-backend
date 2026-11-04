@@ -25,7 +25,6 @@ import tools.jackson.databind.ObjectMapper
 import tools.jackson.databind.JsonNode
 import java.util.UUID
 
-/** Real PostgreSQL, migrations, MVC validation, security filters and transaction commits. */
 @SpringBootTest
 class AuthMvpIntegrationTest {
     @Autowired lateinit var context: WebApplicationContext
@@ -63,8 +62,7 @@ class AuthMvpIntegrationTest {
         postJson("login", """{"email":"$email","password":"password123"}""")
         verifyNoInteractions(sender)
         postJson("request-verification", "{}", token)
-        verify(sender).sendVerificationEmail(((eq(email) ?: "") ?: ""), anyString())
-        // A failed send must not undo account creation or prevent another login.
+        verify(sender).sendVerificationEmail(eq(email) ?: "", anyString())
         postJson("login", """{"email":"$email","password":"password123"}""")
     }
 
@@ -76,9 +74,9 @@ class AuthMvpIntegrationTest {
         verifyNoInteractions(sender)
         postJson("request-verification", "{}", token)
         val captured = ArgumentCaptor.forClass(String::class.java)
-        verify(sender).sendVerificationEmail(((eq(email) ?: "") ?: ""), ((captured.capture() ?: "") ?: ""))
+        verify(sender).sendVerificationEmail(eq(email) ?: "", captured.capture() ?: "")
         postJson("request-verification", "{}", token)
-        verify(sender, times(1)).sendVerificationEmail(((eq(email) ?: "") ?: ""), anyString())
+        verify(sender, times(1)).sendVerificationEmail(eq(email) ?: "", anyString())
         mvc.perform(get("/api/auth/verify-email").param("token", captured.value)).andExpect(status().isOk)
         mvc.perform(get("/api/auth/verify-email").param("token", captured.value)).andExpect(status().isBadRequest)
         mvc.perform(get("/api/auth/me").header("Authorization", "Bearer $token"))
@@ -120,7 +118,6 @@ class AuthMvpIntegrationTest {
     fun `legacy null verification is false and legacy verified account remains verified`() {
         for (verified in listOf(null, true)) {
             val email = "${UUID.randomUUID()}@example.com"
-            // Existing accounts keep their flags; migration also maps historic null to false.
             val user = users.saveAndFlush(User(email = email, nickname = "Legacy",
                 passwordHash = org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("password123"),
                 emailVerified = verified))

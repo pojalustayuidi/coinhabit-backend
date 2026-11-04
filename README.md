@@ -6,6 +6,4 @@
 - [Запуск на Windows и миграция](docs/WINDOWS_SETUP.md)
 - [API авторизации для Android](docs/AUTH_API.md)
 - [Принятые решения и ограничения](docs/AUTH_DECISIONS.md)
-- [Проверки и фактический статус](docs/VERIFICATION.md)
-
-Android-репозиторий не изменялся. Финансовые правила и обмен событиями сохранены.
+- [Запуск тестов](docs/TESTING.md)

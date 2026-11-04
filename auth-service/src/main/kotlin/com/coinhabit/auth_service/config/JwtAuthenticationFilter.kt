@@ -47,7 +47,7 @@ class JwtAuthenticationFilter(
                 if (
                     user != null &&
                     user.id == identity.userId &&
-                    (identity.email == user.id.toString() || identity.email == user.email)
+                    (identity.subject == user.id.toString() || identity.subject == user.email)
                 ) {
                     val role = if (
                         user.role.startsWith("ROLE_")

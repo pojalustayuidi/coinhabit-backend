@@ -12,7 +12,7 @@ import java.util.UUID
 import javax.crypto.SecretKey
 
 data class JwtIdentity(
-    val email: String,
+    val subject: String,
     val userId: UUID
 )
 
@@ -34,7 +34,7 @@ class JwtService(
         )
 
     fun generateToken(
-        email: String,
+        subject: String,
         role: String,
         userId: String,
         guest: Boolean = false
@@ -44,17 +44,13 @@ class JwtService(
         val now = System.currentTimeMillis()
 
         return Jwts.builder()
-            .subject(email)
+            .subject(subject)
             .claim("role", role)
             .claim("userId", userId)
             .issuedAt(Date(now))
             .expiration(Date(now + lifetime))
             .signWith(signingKey)
             .compact()
-    }
-
-    fun extractEmail(token: String): String {
-        return extractAllClaims(token).subject
     }
 
     fun isTokenValid(token: String): Boolean {
@@ -70,7 +66,7 @@ class JwtService(
         return try {
             val claims = extractAllClaims(token)
 
-            val email = claims.subject
+            val subject = claims.subject
                 ?.takeIf { it.isNotBlank() }
                 ?: return null
 
@@ -87,7 +83,7 @@ class JwtService(
             }
 
             JwtIdentity(
-                email = email,
+                subject = subject,
                 userId = userId
             )
         } catch (e: Exception) {

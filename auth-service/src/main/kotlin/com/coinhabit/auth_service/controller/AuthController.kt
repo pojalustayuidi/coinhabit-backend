@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.server.ResponseStatusException
 
 @RestController
 @RequestMapping("/api/auth")
@@ -100,9 +101,11 @@ class AuthController(
         return authService.getCurrentUser(currentUserId())
     }
 
-    private fun currentUserId(): UUID = UUID.fromString(
-        SecurityContextHolder.getContext().authentication?.name ?: throw org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED)
-    )
+    private fun currentUserId(): UUID {
+        val authentication = SecurityContextHolder.getContext().authentication
+            ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED)
+        return UUID.fromString(authentication.name)
+    }
 }
 
 data class ResendVerificationRequest(
