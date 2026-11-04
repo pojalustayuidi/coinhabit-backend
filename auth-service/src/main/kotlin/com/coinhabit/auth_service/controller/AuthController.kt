@@ -101,7 +101,7 @@ class AuthController(
     }
 
     private fun currentUserId(): UUID = UUID.fromString(
-        SecurityContextHolder.getContext().authentication.name
+        SecurityContextHolder.getContext().authentication?.name ?: throw org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED)
     )
 }
 
