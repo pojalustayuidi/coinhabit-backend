@@ -45,6 +45,7 @@ class SecurityConfig {
                 auth
                     .requestMatchers(
                         "/api/auth/register",
+                        "/api/auth/guest",
                         "/api/auth/login",
                         "/api/auth/verify-email",
                         "/api/auth/resend-verification"

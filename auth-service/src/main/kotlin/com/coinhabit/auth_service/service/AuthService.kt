@@ -1,20 +1,19 @@
-
 package com.coinhabit.auth_service.service
 
-import com.coinhabit.auth_service.dto.AuthResponse
-import com.coinhabit.auth_service.dto.LoginRequest
-import com.coinhabit.auth_service.dto.RegisterRequest
-import com.coinhabit.auth_service.dto.UserDto
+import com.coinhabit.auth_service.dto.*
 import com.coinhabit.auth_service.entity.User
 import com.coinhabit.auth_service.exception.InvalidCredentialsException
 import com.coinhabit.auth_service.exception.UserAlreadyExistsException
+import com.coinhabit.auth_service.exception.AccountStateException
 import com.coinhabit.auth_service.repository.UserRepository
+import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.util.Locale
+import java.util.UUID
 
 @Service
 class AuthService(
@@ -23,179 +22,117 @@ class AuthService(
     private val jwtService: JwtService,
     private val emailVerificationService: EmailVerificationService,
     private val verificationEmailSender: VerificationEmailSender,
-    private val verificationEmailRateLimiter: VerificationEmailRateLimiter
+    private val verificationEmailRateLimiter: VerificationEmailRateLimiter,
+    private val guestCreationRateLimiter: GuestCreationRateLimiter
 ) {
-
     @Transactional
-    fun register(request: RegisterRequest): UserDto {
-        val email = request.email
-            .trim()
-            .lowercase(Locale.ROOT)
-
-        if (userRepository.existsByEmail(email)) {
-            throw UserAlreadyExistsException("Email уже занят")
-        }
-
-        val hashedPassword = passwordEncoder.encode(
-            request.password
-        ) ?: throw IllegalStateException(
-            "Не удалось захешировать пароль"
-        )
-
-        val user = User(
+    fun register(request: RegisterRequest): AuthResponse {
+        val email = normalizeEmail(request.email)
+        checkEmailAvailable(email)
+        val user = userRepository.saveAndFlush(User(
             email = email,
             nickname = request.nickname.trim(),
-            passwordHash = hashedPassword,
+            passwordHash = hashPassword(request.password),
             emailVerified = false
-        )
-
-        val savedUser = userRepository.save(user)
-
-        val userId = savedUser.id
-            ?: throw IllegalStateException(
-                "Не удалось получить ID пользователя"
-            )
-
-        val verificationToken =
-            emailVerificationService.createVerificationToken(userId)
-
-        sendVerificationEmailAfterCommit(
-            email = savedUser.email,
-            token = verificationToken
-        )
-
-        return UserDto(
-            id = userId,
-            email = savedUser.email,
-            nickname = savedUser.nickname,
-            role = savedUser.role
-        )
+        ))
+        return authorize(user)
     }
 
     @Transactional
-    fun resendVerificationEmail(email: String) {
-        val normalizedEmail = email
-            .trim()
-            .lowercase(Locale.ROOT)
+    fun createGuest(clientAddress: String): AuthResponse {
+        guestCreationRateLimiter.acquire(clientAddress)
+        return authorize(userRepository.saveAndFlush(User(nickname = "Гость", guest = true)))
+    }
 
-        val allowed = verificationEmailRateLimiter
-            .tryAcquire(normalizedEmail)
-
-        if (!allowed) {
-            return
-        }
-
-        val user = userRepository.findByEmail(
-            normalizedEmail
-        ) ?: return
-
-        if (user.emailVerified == true) {
-            return
-        }
-
-        val userId = user.id
-            ?: throw IllegalStateException(
-                "У пользователя отсутствует ID"
-            )
-
-        val verificationToken =
-            emailVerificationService.createVerificationToken(userId)
-
-        sendVerificationEmailAfterCommit(
-            email = user.email,
-            token = verificationToken
-        )
+    @Transactional
+    fun upgradeGuest(userId: UUID, request: RegisterRequest): AuthResponse {
+        // Serializes concurrent upgrades; no cross-service copy or account merging.
+        val user = userRepository.findForUpdate(userId)
+            ?: throw InvalidCredentialsException("Пользователь не найден")
+        if (!user.guest) throw AccountStateException("Аккаунт уже зарегистрирован")
+        val email = normalizeEmail(request.email)
+        checkEmailAvailable(email)
+        user.email = email
+        user.passwordHash = hashPassword(request.password)
+        user.nickname = request.nickname.trim()
+        user.emailVerified = false
+        user.guest = false
+        userRepository.saveAndFlush(user)
+        return authorize(user)
     }
 
     @Transactional(readOnly = true)
     fun login(request: LoginRequest): AuthResponse {
-        val email = request.email
-            .trim()
-            .lowercase(Locale.ROOT)
-
-        val user = userRepository.findByEmail(email)
-            ?: throw InvalidCredentialsException(
-                "Неверный email или пароль"
-            )
-
-        if (!passwordEncoder.matches(
-                request.password,
-                user.passwordHash
-            )) {
-            throw InvalidCredentialsException(
-                "Неверный email или пароль"
-            )
+        val user = userRepository.findByEmail(normalizeEmail(request.email))
+            ?: throw InvalidCredentialsException("Неверный email или пароль")
+        if (user.guest || user.passwordHash == null ||
+            !passwordEncoder.matches(request.password, user.passwordHash)) {
+            throw InvalidCredentialsException("Неверный email или пароль")
         }
-
-        if (user.emailVerified != true) {
-            throw InvalidCredentialsException(
-                "Подтвердите email для входа"
-            )
-        }
-
-        val userId = user.id
-            ?: throw IllegalStateException(
-                "У пользователя в БД отсутствует ID"
-            )
-
-        val token = jwtService.generateToken(
-            user.email,
-            user.role,
-            userId.toString()
-        )
-
-        return AuthResponse(
-            token = token,
-            user = UserDto(
-                id = userId,
-                email = user.email,
-                nickname = user.nickname,
-                role = user.role
-            )
-        )
+        return authorize(user)
     }
 
     @Transactional(readOnly = true)
-    fun getCurrentUser(email: String): UserDto {
-        val user = userRepository.findByEmail(email)
-            ?: throw InvalidCredentialsException(
-                "Пользователь не найден"
-            )
+    fun getCurrentUser(userId: UUID): UserDto = toDto(
+        userRepository.findById(userId).orElseThrow {
+            InvalidCredentialsException("Пользователь не найден")
+        }
+    )
 
-        val userId = user.id
-            ?: throw IllegalStateException(
-                "У пользователя в БД отсутствует ID"
-            )
-
-        return UserDto(
-            id = userId,
-            email = user.email,
-            nickname = user.nickname,
-            role = user.role
-        )
+    @Transactional
+    fun requestVerification(userId: UUID) {
+        val user = userRepository.findById(userId).orElseThrow {
+            InvalidCredentialsException("Пользователь не найден")
+        }
+        if (user.guest) throw AccountStateException("Сначала зарегистрируйте гостевой аккаунт")
+        resendVerificationEmail(requireNotNull(user.email))
     }
 
-    private fun sendVerificationEmailAfterCommit(
-        email: String,
-        token: String
-    ) {
-        check(
-            TransactionSynchronizationManager.isActualTransactionActive() &&
-                    TransactionSynchronizationManager.isSynchronizationActive()
-        ) {
-            "Отправку письма необходимо планировать внутри транзакции"
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(
-            object : TransactionSynchronization {
-
-                override fun afterCommit() {
-                    verificationEmailSender.sendVerificationEmail(
-                        email = email,
-                        rawToken = token
-                    )
+    @Transactional
+    fun resendVerificationEmail(email: String) {
+        val normalized = normalizeEmail(email)
+        if (!verificationEmailRateLimiter.tryAcquire(normalized)) return
+        val user = userRepository.findByEmail(normalized) ?: return
+        if (user.guest || user.emailVerified == true) return
+        val token = emailVerificationService.createVerificationToken(requireNotNull(user.id))
+        check(TransactionSynchronizationManager.isSynchronizationActive())
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+            override fun afterCommit() {
+                try {
+                    verificationEmailSender.sendVerificationEmail(normalized, token)
+                } catch (_: Exception) {
+                    // Never log the address, raw token, or SMTP credentials.
+                    LoggerFactory.getLogger(AuthService::class.java)
+                        .warn("Verification email delivery failed; user may retry after cooldown")
                 }
             }
-        )
+        })
     }
+
+    private fun normalizeEmail(email: String) = email.trim().lowercase(Locale.ROOT)
+
+    private fun checkEmailAvailable(email: String) {
+        if (userRepository.existsByEmail(email)) throw UserAlreadyExistsException("Email уже занят")
+    }
+
+    private fun hashPassword(password: String): String {
+        // BCrypt truncates at 72 bytes, not 72 Unicode characters.
+        require(password.toByteArray(Charsets.UTF_8).size <= 72) { "Пароль длиннее 72 байт UTF-8" }
+        return requireNotNull(passwordEncoder.encode(password))
+    }
+
+    private fun authorize(user: User) = AuthResponse(
+        token = jwtService.generateToken(requireNotNull(user.id).toString(), user.role,
+            requireNotNull(user.id).toString(), user.guest),
+        user = toDto(user)
+    )
+
+    private fun toDto(user: User) = UserDto(
+        id = requireNotNull(user.id),
+        email = user.email.orEmpty(),
+        nickname = user.nickname,
+        role = user.role,
+        emailVerified = user.emailVerified == true,
+        isGuest = user.guest
+    )
 }

@@ -21,9 +21,9 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: coinhabit
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:coinhabit}
     password: ${RABBITMQ_PASSWORD}
 
     publisher-confirm-type: correlated

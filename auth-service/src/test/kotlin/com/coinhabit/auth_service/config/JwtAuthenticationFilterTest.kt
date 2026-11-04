@@ -18,6 +18,7 @@ import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.core.context.SecurityContextHolder
 import java.util.UUID
+import java.util.Optional
 
 class JwtAuthenticationFilterTest {
 
@@ -61,7 +62,7 @@ class JwtAuthenticationFilterTest {
             SecurityContextHolder.getContext().authentication
 
         assertTrue(chainCalled)
-        assertEquals(email, authentication?.principal)
+        assertEquals(userId.toString(), authentication?.principal)
         assertTrue(
             authentication?.authorities?.any {
                 it.authority == "ROLE_USER"
@@ -87,7 +88,7 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
-    fun `unverified user is not authenticated`() {
+    fun `unverified user is authenticated`() {
         val user = mockUser(
             id = userId,
             verified = false
@@ -98,9 +99,7 @@ class JwtAuthenticationFilterTest {
         val chainCalled = executeFilter(token)
 
         assertTrue(chainCalled)
-        assertNull(
-            SecurityContextHolder.getContext().authentication
-        )
+        assertEquals(userId.toString(), SecurityContextHolder.getContext().authentication?.principal)
     }
 
     @Test
@@ -112,8 +111,8 @@ class JwtAuthenticationFilterTest {
         )
 
         Mockito.`when`(
-            userRepository.findByEmail(email)
-        ).thenReturn(null)
+            userRepository.findById(userId)
+        ).thenReturn(Optional.empty())
 
         val chainCalled = executeFilter(token)
 
@@ -176,8 +175,8 @@ class JwtAuthenticationFilterTest {
         )
 
         Mockito.`when`(
-            userRepository.findByEmail(email)
-        ).thenReturn(user)
+            userRepository.findById(userId)
+        ).thenReturn(Optional.of(user))
     }
 
     private fun executeFilter(jwt: String?): Boolean {

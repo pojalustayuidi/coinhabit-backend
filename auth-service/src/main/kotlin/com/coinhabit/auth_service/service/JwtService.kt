@@ -22,7 +22,10 @@ class JwtService(
     private val secretKey: String,
 
     @Value("\${jwt.expiration}")
-    private val jwtExpiration: Long
+    private val jwtExpiration: Long,
+
+    @Value("\${jwt.guest-expiration:604800000}")
+    private val guestExpiration: Long = 604800000
 ) {
 
     private val signingKey: SecretKey
@@ -33,8 +36,11 @@ class JwtService(
     fun generateToken(
         email: String,
         role: String,
-        userId: String
+        userId: String,
+        guest: Boolean = false
     ): String {
+        val lifetime = if (guest) guestExpiration else jwtExpiration
+        require(lifetime in 60_000L..604_800_000L) { "JWT lifetime must be between one minute and seven days" }
         val now = System.currentTimeMillis()
 
         return Jwts.builder()
@@ -42,7 +48,7 @@ class JwtService(
             .claim("role", role)
             .claim("userId", userId)
             .issuedAt(Date(now))
-            .expiration(Date(now + jwtExpiration))
+            .expiration(Date(now + lifetime))
             .signWith(signingKey)
             .compact()
     }

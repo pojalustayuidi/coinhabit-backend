@@ -16,21 +16,23 @@ class User(
     @GeneratedValue(strategy = GenerationType.UUID)
     val id: UUID? = null,
 
-    @Column(unique = true, nullable = false)
-    val email: String,
+    @Column(unique = true)
+    var email: String? = null,
 
     @Column(nullable = false)
-    val nickname: String,
+    var nickname: String,
 
     @Column(
-        nullable = false,
         name = "password_hash"
     )
-    val passwordHash: String,
+    var passwordHash: String? = null,
 
     @Column(nullable = false)
     val role: String = "USER",
 
     @Column(name = "email_verified")
-    var emailVerified: Boolean? = false
+    var emailVerified: Boolean? = false,
+
+    @Column(name = "is_guest", nullable = false)
+    var guest: Boolean = false
 )

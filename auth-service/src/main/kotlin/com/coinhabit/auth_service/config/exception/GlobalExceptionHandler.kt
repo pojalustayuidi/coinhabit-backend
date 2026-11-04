@@ -16,6 +16,23 @@ class GlobalExceptionHandler {
     private val logger =
         LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun handleIntegrity(e: org.springframework.dao.DataIntegrityViolationException) =
+        ErrorResponse(409, "Email уже занят или конфликт состояния аккаунта")
+
+    @ExceptionHandler(AccountStateException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun handleState(e: AccountStateException) = ErrorResponse(409, e.message)
+
+    @ExceptionHandler(GuestRateLimitException::class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    fun handleLimit(e: GuestRateLimitException) = ErrorResponse(429, e.message)
+
+    @ExceptionHandler(IllegalArgumentException::class, org.springframework.http.converter.HttpMessageNotReadableException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun handleBadRequest(e: Exception) = ErrorResponse(400, "Некорректные данные запроса")
+
     @ExceptionHandler(UserAlreadyExistsException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
     fun handleUserAlreadyExists(

@@ -8,6 +8,8 @@ import com.coinhabit.auth_service.dto.UserDto
 import com.coinhabit.auth_service.service.AuthService
 import com.coinhabit.auth_service.service.EmailVerificationService
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
+import java.util.UUID
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
@@ -28,14 +30,20 @@ class AuthController(
     @ResponseStatus(HttpStatus.CREATED)
     fun register(
         @Valid @RequestBody request: RegisterRequest
-    ): RegistrationResponse {
+    ): AuthResponse = authService.register(request)
 
-        val user = authService.register(request)
+    @PostMapping("/guest")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun guest(request: HttpServletRequest): AuthResponse = authService.createGuest(request.remoteAddr)
 
-        return RegistrationResponse(
-            message = "Регистрация успешна. Проверьте почту для подтверждения email.",
-            user = user
-        )
+    @PostMapping("/guest/upgrade")
+    fun upgrade(@Valid @RequestBody request: RegisterRequest): AuthResponse =
+        authService.upgradeGuest(currentUserId(), request)
+
+    @PostMapping("/request-verification")
+    fun requestVerification(): Map<String, String> {
+        authService.requestVerification(currentUserId())
+        return mapOf("message" to "Запрос принят. При отсутствии подтверждения будет предпринята отправка письма")
     }
 
     @PostMapping("/login")
@@ -88,22 +96,13 @@ class AuthController(
     @GetMapping("/me")
     @ResponseStatus(HttpStatus.OK)
     fun getMe(): UserDto {
-        val authentication =
-            SecurityContextHolder.getContext().authentication
-
-        val email = authentication?.name
-            ?: throw RuntimeException(
-                "Пользователь не авторизован"
-            )
-
-        return authService.getCurrentUser(email)
+        return authService.getCurrentUser(currentUserId())
     }
-}
 
-data class RegistrationResponse(
-    val message: String,
-    val user: UserDto
-)
+    private fun currentUserId(): UUID = UUID.fromString(
+        SecurityContextHolder.getContext().authentication.name
+    )
+}
 
 data class ResendVerificationRequest(
     @field:NotBlank(message = "Email не может быть пустым")
