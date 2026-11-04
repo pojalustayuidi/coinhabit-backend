@@ -65,8 +65,9 @@ class AuthService(
     fun login(request: LoginRequest): AuthResponse {
         val user = userRepository.findByEmail(normalizeEmail(request.email))
             ?: throw InvalidCredentialsException("Неверный email или пароль")
-        if (user.guest || user.passwordHash == null ||
-            !passwordEncoder.matches(request.password, user.passwordHash)) {
+        val passwordHash = user.passwordHash
+        if (user.guest || passwordHash == null ||
+            !passwordEncoder.matches(request.password, passwordHash)) {
             throw InvalidCredentialsException("Неверный email или пароль")
         }
         return authorize(user)

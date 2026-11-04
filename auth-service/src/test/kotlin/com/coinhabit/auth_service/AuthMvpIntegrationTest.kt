@@ -110,6 +110,7 @@ class AuthMvpIntegrationTest {
         postJson("guest/upgrade", registration(email), guest["token"].asText(), 409)
         assertTrue(users.findById(UUID.fromString(guest["user"]["id"].asText())).get().guest)
         postJson("register", """{"email":"broken","nickname":"","password":"1"}""", statusCode = 400)
+        postJson("register", """{"email":"long@example.com","nickname":"Tester","password":"${"я".repeat(40)}"}""", statusCode = 400)
         postJson("login", """{"email":"$email","password":"wrong"}""", statusCode = 401)
         mvc.perform(get("/api/auth/me").header("Authorization", "Bearer invalid")).andExpect(status().isUnauthorized)
         postJson("guest/upgrade", registration(), "invalid", 401)

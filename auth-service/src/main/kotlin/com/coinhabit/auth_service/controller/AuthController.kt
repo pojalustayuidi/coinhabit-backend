@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.context.SecurityContextHolder
@@ -107,5 +108,6 @@ class AuthController(
 data class ResendVerificationRequest(
     @field:NotBlank(message = "Email не может быть пустым")
     @field:Email(message = "Некорректный формат email")
+    @field:Size(max = 254)
     val email: String
 )
